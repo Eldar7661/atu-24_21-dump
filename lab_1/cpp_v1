@@ -1,0 +1,327 @@
+#!/bin/bash
+
+# f_*           -> sourse to file
+# fg_*          -> bool: flag
+
+# *running      -> is compilation bild, run f_output, remove f_output.
+# *compilation  -> is compilation buid.
+
+
+f_delete="none"                     #
+f_config="./cc.json"            # cpp-config .json, file config
+fg_save=false                   # save file config
+fg_compilation=true             # no compilation bild
+f_output_compl="./main.ebi"     # file name output compilation, if $fg_mode == *compilation(false) && no edited
+tab="    "
+tab2="        "
+tab3="            "
+  # config
+f_main="./main.cpp"             # main file compilation
+f_output="./running"            # file name output compilation
+f_cpps=()                       # files compilation
+fg_mode=true                    # mode: *running/*compilation <=> ture/false
+fg_log=true                     # print log
+args=()                         # arguments to g++
+
+log() {
+
+    if $fg_mode
+    then
+        echo -e "\nMode: \e[35mrun\e[0m;"
+    else
+        echo -e "\nMode: \e[35mcompilation\e[0m;"
+    fi
+
+    echo -e "Output file name: \e[36m$f_output\e[0m;"
+
+    echo -e "\nbuild files:"
+    echo -e "$tab""file 0: \e[36m$f_main\e[0m;"
+
+    local count_files=1
+    for f_cpp in "${f_cpps[@]}"
+    do
+        echo -e "$tab""file $count_files: \e[36m$f_cpp\e[0m;"
+        ((count_files++))
+    done
+
+    echo -e "\nbuild arguments:"
+    local count_args=1
+    for arg in "${args[@]}"
+    do
+        echo -e "$tab""argument $count_args: \e[33m$arg\e[0m;"
+        ((count_args++))
+    done
+
+    local author="\e[31m[^_*]: https://t.me/eldar7661\e[0m"
+    local comm="\ncommand:\e[35m g++\e[36m $f_main\e[33m -o\e[36m $f_output\e[33m ${args[@]}\e[36m ${f_cpps[@]}"
+    echo -e "$comm $author"
+
+}
+read_config() {
+
+    trap 'handle_error "$BASH_COMMAND" $LINENO' ERR
+    f_main=$(jq -r '.f_main' $f_config)
+    f_output=$(jq -r '.f_output' $f_config)
+    fg_mode=$(jq -r '.fg_mode' $f_config)
+    fg_log=$(jq -r '.fg_log' $f_config)
+    readarray -t f_cpps < <(jq -r '.f_cpps[]' $f_config)
+    readarray -t args < <(jq -r '.args[]' $f_config)
+
+}
+write_config() {
+
+    local json_f_base="{\"f_main\": \"$f_main\", \"f_output\": \"$f_output\","
+    local json_fg="\"fg_mode\": \"$fg_mode\", \"fg_log\": \"$fg_log\","
+
+    local json_f_cpps="\"f_cpps\":$(printf '%s\n' ${f_cpps[@]} | jq -R . | jq -s .),"
+    local json_args="\"args\":$(printf '%s\n' ${args[@]} | jq -R . | jq -s .)}"
+
+    local json="$json_f_base $json_f_cpps $json_fg $json_args"
+
+    echo -e
+    if echo $json | jq > $f_config
+    then
+        echo -e "Config saved to file \e[32m"$f_config"\e[0m\n"
+    else
+        echo -e "\e[31merror save Config!\e[0m\n"
+    fi
+
+}
+handle_error() {
+    echo -e "\e[31merror read Config!\e[0m\n$1"
+    exit 1
+}
+delete_file() {
+    local fg_deleted=false
+    for ((i=0; i<${#f_cpps[@]}; i++))
+    do
+        if [[ ${f_cpps[i]} == $f_delete ]]
+        then
+            unset f_cpps[i]
+            fg_deleted=true
+        fi
+    done
+    if $fg_deleted
+    then
+        echo -e "\e[31mDeleted file: "$f_delete"\e[0m"
+    else
+        echo -e "\e[31mError delete file: "$f_delete"\e[0m"
+    fi
+}
+help() {
+    fg_compilation=false
+    fg_log=false
+    fg_save=false
+
+    echo -e
+    echo -e "$tab2""Bash Script \"\e[31m.cpp\e[0m\" v1.0"
+    echo -e "$tab""Author: Ali -> \e[35mhttps://t.me/eldar7661\e[0m"
+    echo -e "$tab""            -> \e[35mhttps://github.com/Eldar7661\e[0m\n"
+    echo -e "$tab""[en] The script is made for more convenient compilation \"\e[32mg++\e[0m\"."
+    echo -e "$tab""[ru] Скрипт сделан для более удобной компиляции \"\e[32mg++\e[0m\".\n"
+    echo -e "$tab""[en] Translated \"Google-Translate\".\n"
+
+    echo -e "flags and arguments:\n"
+    echo -e "$tab""-.x [xxxx]        []-> xx xxx xxxxx x xxx."
+    echo -e "$tab"" ^     ^          ^                 ^     "
+    echo -e "$tab"" |     |          |                 |     "
+    echo -e "$tab""flag *arg    value *defl.      description"
+    echo -e "$tab""             or on/off flag\n"
+
+    echo -e "$tab""\e[33m-.n\e[0m  [src]         [\e[36m*name\e[0m]      -> name output file compilation."
+    echo -e "$tab""\e[33m-.m\e[0m  [src]         [\e[36m./main.cpp\e[0m] -> name main file."
+    echo -e "$tab""\e[33m-.f\e[0m  [src .. src]  [\e[31m0\e[0m]          -> add sourses to file bild."
+    echo -e "$tab""\e[33m-.d\e[0m  [src .. src]  [\e[31m0\e[0m]          -> delete sourses to file bild."
+    echo -e "$tab""\e[33m-.c\e[0m  [src]         [\e[31m0\e[0m]          -> read file config."
+    echo -e "$tab""\e[33m-.s\e[0m                [\e[31m0\e[0m]          -> save/new file config in \e[36m./cc.json\e[0m."
+    echo -e "$tab""\e[33m-.o\e[0m                [\e[31m0\e[0m]          -> no compilation bild."
+    echo -e "$tab""\e[33m-.so\e[0m               [\e[31m0\e[0m]          -> \e[33m-.so\e[0m <=> \e[33m-.s -.o\e[0m ."
+    echo -e "$tab""\e[33m-.r\e[0m                [\e[32m1\e[0m]          -> mode *run."
+    echo -e "$tab""\e[33m-..r\e[0m               [\e[31m0\e[0m]          -> mode *compilation."
+    echo -e "$tab""\e[33m-.log\e[0m              [\e[32m1\e[0m]          -> print log config."
+    echo -e "$tab""\e[33m-..log\e[0m             [\e[31m0\e[0m]          -> not print log config."
+    echo -e "$tab""\e[33m-.e\e[0m                [\e[31m0\e[0m]          -> exit for flags with arguments."
+    echo -e "$tab""\e[33m--help\e[0m             [\e[31m0\e[0m]          -> helping as text.\n"
+
+    echo -e "*:"
+    echo -e "$tab""*arg         : argument."
+    echo -e "$tab""*defl        : default."
+    echo -e "$tab""*name        : ./running if mode == *run, else ./main.ebi."
+    echo -e "$tab""*compilation : compilation bild."
+    echo -e "$tab""*run         : compilation bild, run bild, delete bild.\n"
+
+    echo -e "more details:\n"
+    echo -e "$tab""[en] The file \"\e[33m-.m\e[0m\" is always included, this is the main compilation file. By default it is \"\e[36mmain.cpp\e[0m \".\n"
+
+    echo -e "$tab""[en] Flags and arguments are written separated by a space. The space is perceived as the end of the name of the flag or argument."
+    echo -e "$tab2""The script does not provide the ability to escape. It is possible to escape at the level \"\e[32mBash\e[0m\"."
+    echo -e "$tab2""The order of the flags is not important, except for some points that will be discussed later.\n"
+    echo -e "$tab2""Flags without Arguments, example:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-..r -.so\e[0m\n"
+    echo -e "$tab2""Flags with Arguments, example:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.so\e[0m\n"
+
+    echo -e "$tab""[en] The \"\e[33m-.f\e[0m\" and \"\e[33m-.d\e[0m\" flags are needed to control additional compilation files. "
+    echo -e "$tab2" "They take multiple arguments, or rather an infinite number."
+    echo -e "$tab2" "This means that after these flags, absolutely everything will be accepted as arguments of these flags."
+    echo -e "$tab2""Even other flags like:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.f \e[36m./print. cpp ./tab.cpp \e[33m-.so\e[0m\n"
+    echo -e "$tab2" "In this example, the following arguments will go as additional files:"
+    echo -e "$tab3""file 0: \e[36m./main.cpp\e[0m;"
+    echo -e "$tab3""file 1: \e[36m./print.cpp\e[0m;"
+    echo -e "$tab3""file 2: \e[36m./tab.cpp\e[0m;"
+    echo -e "$tab3""file 3: \e[36m-.so\e[0m;\n"
+    echo -e "$tab2""For the flag to be processed as a flag, and not an argument, you need to write it before \"\e[33m-.f\e[0m \":"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.so -.f \e[36m. /print.cpp ./tab.cpp\e[0m\n"
+
+    echo -e "$tab""[en] The \"\e[33m-.с\e[0m\" and \"\e[33m-.s\e[0m\" flags are required to read and write the configuration file "
+    echo -e "$tab2""The flag \"\e[33m-.s\e[0m\" does not necessarily need to be written last, since it does not matter the ordinal position."
+    echo -e "$tab2" "It will save the configuration at the end, after all configuration changes."
+    echo -e "$tab2""The flag \"\e[33m-.с\e[0m\" must be written first, since the configuration file is read immediately.\n"
+    echo -e "$tab2" "If you write it after the flags, for example:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.m \e[36m./MyProgramm.cpp \e[33m-.c \e[36m./MyConf .json\e[0m\n"
+    echo -e "$tab2""And in \"\e[36m./MyConf.json\e[0m\" the main file is specified as \"\e[36m./main.cpp\e[0m\"."
+    echo -e "$tab2" "This is because reading occurs after the main file has been changed."
+    echo -e "$tab2""The parameter \"\e[33m-.m \e[36m./MyProgramm.cpp\e[0m\", will be overwritten in \"\e[33m-.m \e[36m. /main.cpp\e[0m\".\n"
+    echo -e "$tab2""Correct example:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.m \e[36m./MyProgramm .cpp\e[0m\n"
+    echo -e "$tab2""To change the configuration file you need to use the flags \"\e[33m-.с\e[0m\" and \"\e[33m-.s\e[0m\","
+    echo -e "$tab2""in the correct way, and with the flags that will change the configuration.\n"
+
+    echo -e "$tab""[en] What if you need to delete and add compilation files at the same time."
+    echo -e "$tab2" "Since both the flags \"\e[33m-.f\e[0m\" and \"\e[33m-.d\e[0m\" are infinite,"
+    echo -e "$tab2" "then it is not possible to use them together. You will have to do this in two commands."
+    echo -e "$tab2" "Or use the \"\e[33m-.e\e[0m\" flag, which terminates flags with infinite arguments."
+    echo -e "$tab2""Example:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.so \e[33m-.f \e[36m./print.cpp ./tab.cpp \e[33m-.e -.d \e[36m./old.cpp\e[0m\n"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.so \e[33m-.d \e[36m./old.cpp \e[33m-.e -.f \e[36m./print.cpp ./tab.cpp\e[0m\n"
+    echo -e "$tab2" "The two commands are of equal value. Since after the flag with infinite arguments, there are no more flags then,"
+    echo -e "$tab2""There is no point in using \"\e[33m-.e\e[0m\". Also, after \"\e[33m-.e\e[0m\" you can use any flags.\n\n\n\n"
+
+    # ru
+
+     echo -e "$tab""[ru] Файл \"\e[33m-.m\e[0m\" идёт всегда, это главный файл компиляции. По умолчанию это \"\e[36mmain.cpp\e[0m\".\n"
+
+    echo -e "$tab""[ru] Флаги и аргументы пишутся через пробел. Пробел воспринимается как конец название флага или аргумента."
+    echo -e "$tab2""Возможность экранировать, скрипт не предоставляет. Возможно экранировать получится на уровне \"\e[32mBash\e[0m\"."
+    echo -e "$tab2""Порядок флагов не важен, за исключением некоторых моментов о которых позже пойдёт речь.\n"
+    echo -e "$tab2""Флаги без Аргументов, пример:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-..r -.so\e[0m\n"
+    echo -e "$tab2""Флаги с Аргументами, пример:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.so\e[0m\n"
+
+    echo -e "$tab""[ru] Флаги \"\e[33m-.f\e[0m\" и \"\e[33m-.d\e[0m\" необходимы для упровления дополнительных файлов компиляции."
+    echo -e "$tab2""Они принимают несколько аргументов, а точнее бесконечное количство."
+    echo -e "$tab2""Это значит что после этих флагов абсолютно всё будет воспринематся как аргументы данных флагов."
+    echo -e "$tab2""Даже другие флаги например:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.f \e[36m./print.cpp ./tab.cpp \e[33m-.so\e[0m\n"
+    echo -e "$tab2""В этом примере, как дополнительные файлы попадут следующие аргументы:"
+    echo -e "$tab3""file 0: \e[36m./main.cpp\e[0m;"
+    echo -e "$tab3""file 1: \e[36m./print.cpp\e[0m;"
+    echo -e "$tab3""file 2: \e[36m./tab.cpp\e[0m;"
+    echo -e "$tab3""file 3: \e[36m-.so\e[0m;\n"
+    echo -e "$tab2""Чтобы флаг обработался как флаг, а не аргумент нужно его прописать перед \"\e[33m-.f\e[0m \":"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.n \e[36mMyProgramm \e[33m-..r -.so -.f \e[36m./print.cpp ./tab.cpp\e[0m\n"
+
+    echo -e "$tab""[ru] Флаги \"\e[33m-.с\e[0m\" и \"\e[33m-.s\e[0m\" необходимы для чтения и записи файла конфигурации."
+    echo -e "$tab2""Флаг \"\e[33m-.s\e[0m\" не обезательно писать последним, так как независимо от порядкового положения."
+    echo -e "$tab2""Он сохранит конфигурацию в конце, после всех конфигурационных изменений."
+    echo -e "$tab2""Флаг \"\e[33m-.с\e[0m\" обезательно нужно писать первым, так как, тут же происходит чтение конфигурационного файла.\n"
+    echo -e "$tab2""Если его написать после флагов, например:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.m \e[36m./MyProgramm.cpp \e[33m-.c \e[36m./MyConf.json\e[0m\n"
+    echo -e "$tab2""А в \"\e[36m./MyConf.json\e[0m\" указан главный файл как \"\e[36m./main.cpp\e[0m\"."
+    echo -e "$tab2""То поскольку чтение происходит после изменения главного файла."
+    echo -e "$tab2""Параметр \"\e[33m-.m \e[36m./MyProgramm.cpp\e[0m\", затрётся в \"\e[33m-.m \e[36m./main.cpp\e[0m\".\n"
+    echo -e "$tab2""Правельный приммер:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.m \e[36m./MyProgramm.cpp\e[0m\n"
+    echo -e "$tab2""Чтобы изменить файл конфигурации нужно использовать флаги \"\e[33m-.с\e[0m\" и \"\e[33m-.s\e[0m\","
+    echo -e "$tab2""правельным образом, и флагами которыми будет изменёна конфигурация.\n"
+
+    echo -e "$tab""[ru] А что если нужно одновременно удалить и добавить файлы компиляции."
+    echo -e "$tab2""Так как оба флага \"\e[33m-.f\e[0m\" и \"\e[33m-.d\e[0m\" являются бесконечными,"
+    echo -e "$tab2""то их не возможно использовать вместе. Придётся это сделать за две команды."
+    echo -e "$tab2""Или использоват флаг \"\e[33m-.e\e[0m\", который завершает флаги с бесконечными аргументами."
+    echo -e "$tab2""Пример:"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.so \e[33m-.f \e[36m./print.cpp ./tab.cpp \e[33m-.e -.d \e[36m./old.cpp\e[0m\n"
+    echo -e "$tab3""\e[32m$ \e[31m./cpp \e[33m-.c \e[36m./MyConf.json \e[33m-.so \e[33m-.d \e[36m./old.cpp \e[33m-.e -.f \e[36m./print.cpp ./tab.cpp\e[0m\n"
+    echo -e "$tab2""Две команды равно значны. Так как после флага с бесконечными аргументами, нет больше флагов то,"
+    echo -e "$tab2""нет смыла использовать \"\e[33m-.e\e[0m\". Так же после \"\e[33m-.e\e[0m\" можно использовать любые флаги."
+
+    # -.flag what?
+
+    # ALL f_cpps
+
+    # args
+
+    echo -e
+    exit 0
+}
+
+flag="none"
+for arg in $@
+do
+    if [[ $arg == "-.e" ]]
+    then
+        flag="none"
+        continue
+    fi
+    if [ "$flag" != "none" ]
+    then
+        case $flag in
+            "-name") f_output=$arg ;;
+            "-main") f_main=$arg ;;
+            "-config") f_config=$arg; read_config ;;
+
+            "-files-remove") f_delete=$arg; delete_file ;;
+            "-files-add") f_cpps+=( $arg ) ;;
+        esac
+        if [[ "$flag" != "-files-add" && "$flag" != "-files-remove" ]]
+        then
+            flag="none"
+        fi
+    else
+        case "$arg" in
+            "-.r") fg_mode=true ;;
+            "-..r") fg_mode=false ;;
+
+            "-.log") fg_log=true ;;
+            "-..log") fg_log=false ;;
+
+            "-.s") fg_save=true ;;
+            "-.o") fg_compilation=false ;;
+            "-.so") fg_save=true; fg_compilation=false ;;
+
+            "-.n") flag="-name" ;;
+            "-.m") flag="-main" ;;
+            "-.c") flag="-config" ;;
+            "-.f") flag="-files-add" ;;
+            "-.d") flag="-files-remove" ;;
+
+            "--help") help;;
+            *) args+=( $arg ) ;;
+        esac
+    fi
+done
+
+if [[ "$fg_mode" == false && "$f_output" == "./running" ]]; then f_output=$f_output_compl; fi
+if $fg_log; then log; fi
+if $fg_save; then write_config; fi
+
+if $fg_compilation
+then
+    command_gpp="g++ $f_main -o $f_output ${args[@]} ${f_cpps[@]}"
+    if $command_gpp
+    then
+        echo -e
+        if $fg_mode
+        then
+            ./"$f_output"
+            rm ./"$f_output"
+        else
+            echo -e "status: \e[32mcompolled!\e[0m"
+        fi
+        echo -e
+    else
+        echo -e "status: \e[31merror compilation!\e[0m"
+    fi
+fi
